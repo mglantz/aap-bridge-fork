@@ -212,7 +212,6 @@ archive/
 # AI Development Workflow (private - not tracked in public repos)
 .claude/
 .gemini/
-CLAUDE.md
 GEMINI.md
 .mcp.json
 workflow/
