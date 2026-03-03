@@ -71,7 +71,7 @@ class ResourceImporter:
 
         Args:
             resource_type: Type of resource being imported
-            source_id: Source resource ID (from AAP 2.3)
+            source_id: Source resource ID (from source AAP)
             data: Transformed resource data
             resolve_dependencies: Whether to resolve foreign key dependencies
 
@@ -601,7 +601,7 @@ class CredentialTypeImporter(ResourceImporter):
 
         Args:
             resource_type: Type of resource being imported
-            source_id: Source resource ID (from AAP 2.3)
+            source_id: Source resource ID (from source AAP)
             data: Transformed resource data
             resolve_dependencies: Whether to resolve foreign key dependencies
 
@@ -2045,8 +2045,14 @@ class CredentialImporter(ResourceImporter):
     }
 
     # Built-in credential type IDs (managed by AAP, consistent across versions)
-    # Built-in types are IDs 1-27 in both AAP 2.3 and AAP 2.6
+    # Built-in types are IDs 1-27 in AAP 2.3, 2.4, 2.5, and 2.6
     # Custom types start at ID 28+
+    #
+    # NOTE: This assumption should be verified for your specific AAP versions.
+    # If your source or target AAP has different built-in credential type IDs,
+    # adjust this value accordingly. You can verify by checking:
+    #   GET /api/v2/credential_types/?managed=true
+    # on both source and target AAP instances.
     BUILTIN_CREDENTIAL_TYPE_MAX_ID = 27
 
     async def import_resource(
@@ -2064,7 +2070,7 @@ class CredentialImporter(ResourceImporter):
 
         Args:
             resource_type: Type of resource being imported
-            source_id: Source resource ID (from AAP 2.3)
+            source_id: Source resource ID (from source AAP)
             data: Transformed resource data
             resolve_dependencies: Whether to resolve foreign key dependencies
 

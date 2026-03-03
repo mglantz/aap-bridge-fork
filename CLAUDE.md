@@ -6,6 +6,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 AAP Bridge is a production-grade Python tool for migrating Ansible Automation Platform (AAP) installations between versions. It's designed to handle large-scale migrations (80,000+ hosts) using bulk APIs, PostgreSQL-backed state management, and checkpoint/resume capabilities.
 
+**Supported Migrations:**
+- Source: AAP 2.3+, 2.4+, 2.5+
+- Target: AAP 2.5+, 2.6+
+- Common use case: AAP 2.4 (RPM-based) → AAP 2.6 (containerized)
+
 ## Development Commands
 
 ### Environment Setup
@@ -140,6 +145,19 @@ Configuration is hierarchical:
 3. `config/mappings.yaml`: Resource name mappings (e.g., renamed credential types)
 
 **Critical AAP 2.6 Note**: Target URL must point to Platform Gateway (`/api/controller/v2`), not direct controller API (`/api/v2`).
+
+### Version Detection
+
+The tool automatically detects AAP versions from both source and target instances:
+- Queries `/api/v2/config/` endpoint to get actual version
+- Validates version compatibility before migration
+- Logs warnings for unsupported version combinations
+- Falls back to defaults (2.4.0 for source, 2.6.0 for target) if detection fails
+
+Version validation ensures:
+- Source version >= 2.3.0
+- Target version >= 2.5.0
+- Warns on downgrade migrations (target < source)
 
 ## Key Design Principles
 

@@ -106,7 +106,7 @@ class SkipResourceError(Exception):
 
 
 class DataTransformer:
-    """Base transformer for converting AAP 2.3 data to AAP 2.6 format.
+    """Base transformer for converting AAP 2.4+ data to AAP 2.5+ format.
 
     Handles common transformations:
     - Removing deprecated fields
