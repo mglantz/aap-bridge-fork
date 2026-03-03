@@ -204,6 +204,16 @@ tests/
 migrations/
 scripts/
 
+# AAP Bridge State Databases (SQLite)
+migration_state.db
+migration_state.db-journal
+migration_state.db-wal
+migration_state.db-shm
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
 # Documentation PDFs (API references, etc.)
 docs/*.pdf
 archive/

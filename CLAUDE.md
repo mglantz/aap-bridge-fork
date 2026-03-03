@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-AAP Bridge is a production-grade Python tool for migrating Ansible Automation Platform (AAP) installations between versions. It's designed to handle large-scale migrations (80,000+ hosts) using bulk APIs, PostgreSQL-backed state management, and checkpoint/resume capabilities.
+AAP Bridge is a production-grade Python tool for migrating Ansible Automation Platform (AAP) installations between versions. It's designed to handle large-scale migrations (80,000+ hosts) using bulk APIs, database-backed state management (SQLite or PostgreSQL), and checkpoint/resume capabilities.
 
 **Supported Migrations:**
 - Source: AAP 2.3+, 2.4+, 2.5+
@@ -25,7 +25,7 @@ uv sync
 
 # Initialize environment file
 cp .env.example .env
-# Edit .env with AAP credentials and PostgreSQL connection string
+# Edit .env with AAP credentials (SQLite database used by default)
 ```
 
 ### Code Quality
@@ -82,7 +82,7 @@ The codebase is organized into these key layers:
 - `exporter.py`: Exports resources from source AAP (supports parallel page fetching)
 - `transformer.py`: Transforms exported data (ID mapping, field normalization)
 - `importer.py`: Imports transformed data to target AAP (uses bulk operations)
-- `state.py`: PostgreSQL-backed state tracking for idempotency
+- `state.py`: Database-backed state tracking for idempotency (SQLite default, PostgreSQL optional)
 - `checkpoint.py`: Checkpoint creation and resume functionality
 - `parallel_exporter.py`: Parallel resource type export (experimental)
 
@@ -126,7 +126,7 @@ Each phase:
 
 ### State Management
 
-The tool uses PostgreSQL (NOT AAP's database) to track:
+The tool uses a database (SQLite by default, PostgreSQL optional) to track:
 - ID mappings (source ID → target ID) for all resources
 - Migration progress and checkpoints
 - Failed operations for retry
@@ -190,8 +190,24 @@ AAP API returns `$encrypted$` for secret fields. Credentials must be:
 ### Platform Gateway (AAP 2.6+)
 All API calls route through Platform Gateway. The target client automatically handles this.
 
-### PostgreSQL Requirement
-PostgreSQL is required for state management. It's NOT AAP's internal database - it's a separate database you must provision.
+### Database Backend
+
+**Default: SQLite (Zero Configuration)**
+- File-based database (`migration_state.db`)
+- No server setup required
+- Handles migrations with 80,000+ hosts
+- Suitable for 95% of use cases
+
+**Optional: PostgreSQL (Enterprise Scale)**
+- Recommended for 100,000+ resources
+- Supports distributed/remote access
+- Requires separate database setup
+- NOT AAP's internal database - separate instance
+
+To use PostgreSQL, update `.env`:
+```bash
+MIGRATION_STATE_DB_PATH=postgresql://user:pass@localhost:5432/aap_migration
+```
 
 ## Code Style
 
@@ -250,7 +266,11 @@ Required:
 - `SOURCE__TOKEN`: Source AAP access token
 - `TARGET__URL`: Target AAP URL with `/api/controller/v2` path (Platform Gateway)
 - `TARGET__TOKEN`: Target AAP access token
-- `MIGRATION_STATE_DB_PATH`: PostgreSQL connection string
+
+Database (auto-configured in `.env.example`):
+- `MIGRATION_STATE_DB_PATH`: Database connection string
+  - Default: `sqlite:///./migration_state.db` (file-based, zero setup)
+  - Enterprise: `postgresql://user:pass@host:5432/dbname` (optional, for 100k+ resources)
 
 Optional:
 - `VAULT__URL`, `VAULT__ROLE_ID`, `VAULT__SECRET_ID`: HashiCorp Vault credentials

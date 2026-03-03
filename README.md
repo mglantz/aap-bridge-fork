@@ -39,11 +39,10 @@ The tool is organized into several key components:
 ### Prerequisites
 
 - **Python 3.12** or higher
-- **PostgreSQL** database (Required for state management)
 - **Hardware**: Minimum 8GB RAM recommended for large migrations
-- **Network**: Access to Source AAP, Target AAP, and the state management
-  PostgreSQL database (not AAP)
+- **Network**: Access to Source AAP and Target AAP
 - **Credentials**: Admin access to both Source and Target AAP instances
+- **Database**: SQLite (built-in, no setup) or PostgreSQL (optional, for 100k+ resources)
 - **HashiCorp Vault** (Optional but recommended): For migrating encrypted
   credentials securely
 
@@ -70,17 +69,38 @@ The project includes configuration files with recommended default values. You ne
 
 #### 1. Database Setup
 
-The tool requires a PostgreSQL database to track migration state. You must create this database before running the tool. The tool will automatically create the necessary tables on first run.
+The tool uses a database to track migration state (ID mappings, checkpoints, progress). **SQLite is the default** - no setup required!
+
+##### Option A: SQLite (Default - Zero Configuration)
+
+SQLite is a file-based database that requires no server setup. Perfect for most migrations.
+
+- ✅ **No installation required** - Built into Python
+- ✅ **Automatic setup** - Database file created on first run
+- ✅ **Handles large migrations** - Tested with 80,000+ hosts
+- ✅ **Easy backup** - Just copy the `migration_state.db` file
+
+**No configuration needed!** The default `.env` uses SQLite.
+
+##### Option B: PostgreSQL (Optional - For Enterprise Scale)
+
+Consider PostgreSQL only if you need:
+- Migrations with 100,000+ resources
+- Distributed/remote state access
+- Cloud RDS integration
 
 ```bash
-
-# Example: Create database and user locally
+# Create PostgreSQL database and user
 psql -c "CREATE DATABASE aap_migration;"
 psql -c "CREATE USER aap_migration_user WITH PASSWORD 'your_secure_password';"
 psql -c "GRANT ALL PRIVILEGES ON DATABASE aap_migration TO aap_migration_user;"
 # Ensure the user owns the schema/tables (Postgres 15+)
 psql -d aap_migration -c "GRANT ALL ON SCHEMA public TO aap_migration_user;"
+```
 
+Then update `.env`:
+```bash
+MIGRATION_STATE_DB_PATH=postgresql://aap_migration_user:password@localhost:5432/aap_migration
 ```
 
 #### 2. Environment Setup
@@ -107,8 +127,11 @@ SOURCE__TOKEN=your_source_token
 TARGET__URL=https://target-aap.example.com/api/controller/v2
 TARGET__TOKEN=your_target_token
 
-# PostgreSQL state database (REQUIRED)
-MIGRATION_STATE_DB_PATH=postgresql://aap_migration_user:your_secure_password@localhost:5432/aap_migration
+# State database (SQLite by default - no setup required!)
+MIGRATION_STATE_DB_PATH=sqlite:///./migration_state.db
+
+# For PostgreSQL (enterprise scale only):
+# MIGRATION_STATE_DB_PATH=postgresql://aap_migration_user:password@localhost:5432/aap_migration
 
 # HashiCorp Vault (Optional)
 # If configured, the tool can inject credentials. If skipped, credentials must
