@@ -593,3 +593,197 @@ class AAPTargetClient(BaseAPIClient):
         except Exception as e:
             logger.error("aap_connectivity_failed", error=str(e))
             return False
+
+    # Gateway API methods (AAP 2.6+)
+    @retry_api_call
+    async def create_gateway_authenticator(
+        self,
+        name: str,
+        plugin_type: str,
+        configuration: dict[str, Any],
+        enabled: bool = True,
+        create_objects: bool = True,
+        remove_users: bool = False,
+        order: int = 2,
+    ) -> dict[str, Any]:
+        """Create a Platform Gateway authenticator (AAP 2.6+).
+
+        This method creates authenticators via the Platform Gateway API, which is
+        separate from the Controller API. Used for LDAP, SAML, OIDC, etc.
+
+        Args:
+            name: Authenticator name (e.g., "Primary LDAP")
+            plugin_type: Plugin type (e.g., "ansible_base.authentication.authenticator_plugins.ldap")
+            configuration: Authenticator configuration (field names without AUTH_LDAP_ prefix)
+            enabled: Enable the authenticator
+            create_objects: Auto-create users on login
+            remove_users: Remove users when they no longer authenticate
+            order: Authenticator order (1=local, 2+=external)
+
+        Returns:
+            Created authenticator data
+
+        Example:
+            >>> config = {
+            ...     "SERVER_URI": ["ldap://ldap.example.com:389"],
+            ...     "BIND_DN": "cn=svc,ou=ServiceAccounts,dc=example,dc=com",
+            ...     "USER_SEARCH": ["ou=Users,dc=example,dc=com", "SCOPE_SUBTREE", "(uid=%(user)s)"]
+            ... }
+            >>> result = await client.create_gateway_authenticator(
+            ...     name="Primary LDAP",
+            ...     plugin_type="ansible_base.authentication.authenticator_plugins.ldap",
+            ...     configuration=config
+            ... )
+        """
+        # Gateway API is at /api/gateway/v1/ (different from controller API)
+        # Need to construct the full URL, not relative to controller API
+        gateway_url = self.base_url.replace("/api/controller/v2", "/api/gateway/v1")
+        endpoint = f"{gateway_url}/authenticators/"
+
+        payload = {
+            "name": name,
+            "type": plugin_type,
+            "enabled": enabled,
+            "create_objects": create_objects,
+            "remove_users": remove_users,
+            "order": order,
+            "configuration": configuration,
+        }
+
+        try:
+            # Use direct httpx client since endpoint is absolute URL
+            response = await self.client.post(
+                endpoint,
+                json=payload,
+                headers={"Authorization": f"Bearer {self.token}"},
+            )
+            response.raise_for_status()
+            result = response.json()
+
+            logger.info(
+                "gateway_authenticator_created",
+                name=name,
+                plugin_type=plugin_type,
+                authenticator_id=result.get("id"),
+            )
+            return result
+
+        except Exception as e:
+            logger.error(
+                "gateway_authenticator_creation_failed",
+                name=name,
+                plugin_type=plugin_type,
+                error=str(e),
+            )
+            raise
+
+    @retry_api_call
+    async def list_gateway_authenticators(self) -> list[dict[str, Any]]:
+        """List all Platform Gateway authenticators (AAP 2.6+).
+
+        Returns:
+            List of authenticators
+        """
+        gateway_url = self.base_url.replace("/api/controller/v2", "/api/gateway/v1")
+        endpoint = f"{gateway_url}/authenticators/"
+
+        try:
+            response = await self.client.get(
+                endpoint,
+                headers={"Authorization": f"Bearer {self.token}"},
+            )
+            response.raise_for_status()
+            data = response.json()
+            return data.get("results", [])
+
+        except Exception as e:
+            logger.error("gateway_authenticators_list_failed", error=str(e))
+            raise
+
+    @retry_api_call
+    async def create_authenticator_map(
+        self,
+        authenticator_id: int,
+        name: str,
+        map_type: str,
+        triggers: dict[str, Any],
+        organization: str | None = None,
+        team: str | None = None,
+        role: str | None = None,
+        revoke: bool = False,
+        order: int = 10,
+    ) -> dict[str, Any]:
+        """Create an authenticator map for organization/team/user mappings (AAP 2.6+).
+
+        Args:
+            authenticator_id: Authenticator ID to attach the map to
+            name: Map name (e.g., "LDAP - Engineering - Members")
+            map_type: Map type (organization, team, is_superuser, role, allow)
+            triggers: Trigger conditions (e.g., {"groups": {"has_or": ["cn=..."]}})
+            organization: Organization name (for organization/team map types)
+            team: Team name (for team map type)
+            role: Role name (e.g., "Organization Member", "Team Member")
+            revoke: Whether to revoke permission if user doesn't match
+            order: Processing order (lower = higher precedence)
+
+        Returns:
+            Created authenticator map data
+
+        Example:
+            >>> triggers = {"groups": {"has_or": ["cn=Engineering-Users,ou=Groups,dc=example,dc=com"]}}
+            >>> result = await client.create_authenticator_map(
+            ...     authenticator_id=2,
+            ...     name="LDAP - Global Engineering - Members",
+            ...     map_type="organization",
+            ...     organization="Global Engineering",
+            ...     role="Organization Member",
+            ...     triggers=triggers
+            ... )
+        """
+        gateway_url = self.base_url.replace("/api/controller/v2", "/api/gateway/v1")
+        endpoint = f"{gateway_url}/authenticator_maps/"
+
+        payload: dict[str, Any] = {
+            "name": name,
+            "authenticator": authenticator_id,
+            "map_type": map_type,
+            "triggers": triggers,
+            "revoke": revoke,
+            "order": order,
+        }
+
+        # Add optional fields based on map type
+        if organization:
+            payload["organization"] = organization
+        if team:
+            payload["team"] = team
+        if role:
+            payload["role"] = role
+
+        try:
+            response = await self.client.post(
+                endpoint,
+                json=payload,
+                headers={"Authorization": f"Bearer {self.token}"},
+            )
+            response.raise_for_status()
+            result = response.json()
+
+            logger.info(
+                "authenticator_map_created",
+                map_id=result.get("id"),
+                name=name,
+                map_type=map_type,
+                authenticator_id=authenticator_id,
+            )
+            return result
+
+        except Exception as e:
+            logger.error(
+                "authenticator_map_creation_failed",
+                name=name,
+                map_type=map_type,
+                authenticator_id=authenticator_id,
+                error=str(e),
+            )
+            raise
