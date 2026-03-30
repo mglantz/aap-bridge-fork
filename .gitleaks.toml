@@ -23,10 +23,19 @@ regexes = [
 paths = [
     '''tests/fixtures/.*''',
     '''tests/test_data/.*''',
-    '''examples/.*\.json''',
-    '''docs/.*\.md''',
-    '''\.env\.example''',
-    '''\.env\.template''',
+    '''exports/.*''',
+    '''xformed/.*''',
+    '''.*\.backup.*''',
+    '''.*\.bak$''',
+    '''.*\.db$''',
+    '''scripts/.*test.*\.py''',
+    '''scripts/.*fix.*\.sh''',
+    '''.*test.*\.sh''',
+    '''.*test.*\.py''',
+    '''.*SUMMARY\.md$''',
+    '''.*REPORT\.md$''',
+    '''.*INSTRUCTIONS\.md$''',
+    '''.*RESULTS\.md$''',
 ]
 
 # Specific commits to ignore (if needed)
@@ -73,4 +82,6 @@ regexes = [
     '''(password|secret)['\"]?\s*[:=]\s*['\"](\*{4,}|x{4,}|changeme|password123|admin)''',
     '''PASSWORD[_-]FIELD''',
     '''SECRET[_-]KEY[_-]NAME''',
+    '''\[1;3;m.*\[0m''',  # AAP encrypted credentials with ANSI codes
+    '''\$encrypted\$''',  # AAP encrypted credential marker
 ]
