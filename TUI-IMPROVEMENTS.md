@@ -19,13 +19,14 @@ Complete overhaul of the import experience with enhanced TUI, dependency validat
 - ❌ No granular progress tracking
 
 ### After:
-- ✅ Enhanced import submenu with 7 options
+- ✅ Enhanced import submenu with 6 focused options
 - ✅ Pre-flight dependency validation
 - ✅ Resource-level progress tracking with error details
 - ✅ Smart retry for failed resources only
 - ✅ Resume capability (don't lose progress)
 - ✅ Detailed error reporting with root cause analysis
 - ✅ Real-time progress display
+- ✅ Granular micro-phase import (recommended approach)
 
 ## New Features
 
@@ -37,14 +38,14 @@ Complete overhaul of the import experience with enhanced TUI, dependency validat
 Import Resources
 ├── 1. Pre-flight Check (Validate Dependencies)
 ├── 2. Import All Resources (Automatic)
-├── 3. Granular Import (Step-by-Step Control) ⭐ NEW!
-├── 4. Import Phase 1 (Base Resources)
-├── 5. Import Phase 2 (Projects + Automation)
-├── 6. Retry Failed Resources
-├── 7. View Import Status
-├── 8. View Failed Resources
+├── 3. Granular Import (Step-by-Step Control) ⭐ Recommended
+├── 4. Retry Failed Resources
+├── 5. View Import Status
+├── 6. View Failed Resources
 └── b. Back to Main Menu
 ```
+
+**Note:** Phase 1 and Phase 2 options have been removed to encourage users to use the Granular Import option, which provides better visibility and control.
 
 **Features:**
 - Visual progress bars for each resource type
@@ -341,6 +342,15 @@ job_templates  89         Deploy Application     Missing credential: 42
 9. **`src/aap_migration/validation/__init__.py`**
    - Exported DependencyValidator
 
+### Design Decision:
+
+**Phase 1/Phase 2 Options Removed:**
+- Users are encouraged to use Granular Import (Option 3) for better control
+- Provides 17 micro-phases instead of just 2 broad phases
+- Better visibility into what's being imported
+- Easier to troubleshoot and retry specific phases
+- More user-friendly than generic "Phase 1" and "Phase 2"
+
 ## User Experience Improvements
 
 ### Old Workflow:
@@ -444,19 +454,28 @@ job_templates  89         Deploy Application     Missing credential: 42
 ```
 feat: comprehensive TUI improvements for import workflow
 
-- Add enhanced import submenu with 8 interactive options
-- Add granular micro-phase import (17 phases, step-by-step control)
+- Add enhanced import submenu with 6 focused options
+- Add granular micro-phase import (17 phases, step-by-step control) ⭐ Recommended
 - Implement pre-flight dependency validation
 - Add granular resource-level progress tracking with error details
 - Create smart retry system for failed resources only
 - Add import status and failed resources viewers
 - Improve error reporting with root cause analysis
+- Remove Phase 1/Phase 2 options to encourage granular approach
+- Refactor to use proven migrate command (single source of truth)
 
 Solves the "Phase 2 failed" problem by providing:
 - Validation before import
 - Real-time progress visibility
 - Detailed error tracking
 - Smart retry without losing progress
+- Consistent behavior across all import methods
+
+Architecture:
+- All import methods now delegate to proven 'aap-bridge migrate' command
+- No duplicate import logic
+- Subprocess isolation prevents event loop issues
+- Single source of truth for import logic
 
 New commands:
 - aap-bridge retry failed
@@ -464,7 +483,8 @@ New commands:
 - aap-bridge import --check-dependencies (enhanced)
 
 New TUI screens:
-- Enhanced import submenu
+- Enhanced import submenu (6 options)
+- Granular import with 17 micro-phases
 - Pre-flight validation report
 - Import status dashboard
 - Failed resources report
