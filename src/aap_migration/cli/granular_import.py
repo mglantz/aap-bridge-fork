@@ -266,13 +266,30 @@ class GranularImporter:
                         progress.update(task, advance=1)
 
                 except Exception as e:
-                    failed += 1
-                    progress.update(task, advance=1, fail_count=failed)
-                    logger.error(
-                        f"Failed to import {resource_name}: {e}",
-                        resource_type=resource_type,
-                        source_id=source_id,
-                    )
+                    error_msg = str(e).lower()
+                    # Check if resource already exists on target
+                    if "already exists" in error_msg or ("400" in str(e) and (
+                        "username" in error_msg or
+                        "name" in error_msg or
+                        "duplicate" in error_msg
+                    )):
+                        # Resource already exists, count as success
+                        completed += 1
+                        progress.update(task, advance=1, success_count=completed)
+                        logger.info(
+                            f"Resource already exists on target, marking as completed: {resource_name}",
+                            resource_type=resource_type,
+                            source_id=source_id,
+                        )
+                    else:
+                        # Real failure
+                        failed += 1
+                        progress.update(task, advance=1, fail_count=failed)
+                        logger.error(
+                            f"Failed to import {resource_name}: {e}",
+                            resource_type=resource_type,
+                            source_id=source_id,
+                        )
 
         return {
             "total": len(all_resources),

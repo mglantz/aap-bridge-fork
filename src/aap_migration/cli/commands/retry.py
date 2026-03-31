@@ -257,7 +257,18 @@ def retry_failed(
                         if result:
                             echo_success(f"  ✓ {resource.get('name', source_id)}")
                     except Exception as e:
-                        echo_error(f"  ✗ {resource.get('name', source_id)}: {e}")
+                        error_msg = str(e).lower()
+                        # Check if resource already exists on target
+                        if "already exists" in error_msg or ("400" in str(e) and (
+                            "username" in error_msg or
+                            "name" in error_msg or
+                            "duplicate" in error_msg
+                        )):
+                            # Resource already exists, treat as success
+                            echo_info(f"  ↷ {resource.get('name', source_id)} (already exists)")
+                        else:
+                            # Real failure
+                            echo_error(f"  ✗ {resource.get('name', source_id)}: {e}")
 
             asyncio.run(import_resources())
 
