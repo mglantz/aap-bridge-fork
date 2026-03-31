@@ -1,6 +1,5 @@
 """Granular micro-phase import with step-by-step control."""
 
-import asyncio
 import json
 import subprocess
 import sys
@@ -192,10 +191,15 @@ class GranularImporter:
         # Get stats BEFORE import
         stats_before = self.get_import_stats(resource_type)
 
+        # Build config path argument (only if config_path exists)
+        config_arg = []
+        if hasattr(self.ctx, 'config_path') and self.ctx.config_path:
+            config_arg = ["--config", str(self.ctx.config_path)]
+
         # Build command using the proven migrate command
         cmd = [
             sys.executable, "-m", "aap_migration.cli.main",
-            "--config", str(self.ctx.config_path) if hasattr(self.ctx, 'config_path') and self.ctx.config_path else str(Path.cwd() / "config.yaml"),
+        ] + config_arg + [
             "migrate",
             "-r", resource_type,
             "--skip-prep",
