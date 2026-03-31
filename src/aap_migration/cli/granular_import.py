@@ -170,68 +170,8 @@ class GranularImporter:
 
         return table
 
-    async def _import_resources_async(
-        self,
-        importer: Any,
-        resource_type: str,
-        all_resources: list,
-        progress: Progress,
-        task: Any,
-    ) -> dict[str, int]:
-        """Async helper to import resources.
-
-        Args:
-            importer: Resource importer
-            resource_type: Resource type name
-            all_resources: List of resources to import
-            progress: Rich Progress instance
-            task: Progress task
-
-        Returns:
-            Dictionary with counts
-        """
-        completed = 0
-        failed = 0
-        skipped = 0
-
-        for resource in all_resources:
-            source_id = resource.get("_source_id") or resource.get("id")
-            resource_name = resource.get("name", f"ID:{source_id}")
-
-            # Check if already imported
-            if self.state.is_migrated(resource_type, source_id):
-                skipped += 1
-                progress.update(task, advance=1)
-                continue
-
-            try:
-                result = await importer.import_resource(
-                    resource_type,
-                    source_id,
-                    resource,
-                    resolve_dependencies=True,
-                )
-
-                if result:
-                    completed += 1
-                    progress.update(task, advance=1, success_count=completed)
-                else:
-                    skipped += 1
-                    progress.update(task, advance=1)
-
-            except Exception as e:
-                failed += 1
-                progress.update(task, advance=1, fail_count=failed)
-                logger.error(
-                    f"Failed to import {resource_name}: {e}",
-                    resource_type=resource_type,
-                    source_id=source_id,
-                )
-
-        return {"completed": completed, "failed": failed, "skipped": skipped}
-
-    def import_micro_phase(self, micro_phase: dict) -> dict[str, Any]:
-        """Import a single micro-phase.
+    async def _import_micro_phase_async(self, micro_phase: dict) -> dict[str, Any]:
+        """Import a single micro-phase (async version).
 
         Args:
             micro_phase: Micro-phase definition
@@ -275,6 +215,11 @@ class GranularImporter:
             self.ctx.config.performance,
         )
 
+        # Import with progress
+        completed = 0
+        failed = 0
+        skipped = 0
+
         # Progress bar
         progress = Progress(
             SpinnerColumn(),
@@ -293,23 +238,51 @@ class GranularImporter:
             fail_count=0,
         )
 
-        # Run async import in event loop
+        # Import resources with progress display
         with Live(progress, console=self.console):
-            counts = asyncio.run(
-                self._import_resources_async(
-                    importer, resource_type, all_resources, progress, task
-                )
-            )
+            for resource in all_resources:
+                source_id = resource.get("_source_id") or resource.get("id")
+                resource_name = resource.get("name", f"ID:{source_id}")
+
+                # Check if already imported
+                if self.state.is_migrated(resource_type, source_id):
+                    skipped += 1
+                    progress.update(task, advance=1)
+                    continue
+
+                try:
+                    result = await importer.import_resource(
+                        resource_type,
+                        source_id,
+                        resource,
+                        resolve_dependencies=True,
+                    )
+
+                    if result:
+                        completed += 1
+                        progress.update(task, advance=1, success_count=completed)
+                    else:
+                        skipped += 1
+                        progress.update(task, advance=1)
+
+                except Exception as e:
+                    failed += 1
+                    progress.update(task, advance=1, fail_count=failed)
+                    logger.error(
+                        f"Failed to import {resource_name}: {e}",
+                        resource_type=resource_type,
+                        source_id=source_id,
+                    )
 
         return {
             "total": len(all_resources),
-            "completed": counts["completed"],
-            "failed": counts["failed"],
-            "skipped": counts["skipped"],
+            "completed": completed,
+            "failed": failed,
+            "skipped": skipped,
         }
 
-    def run(self) -> None:
-        """Run granular import with step-by-step control."""
+    async def run_async(self) -> None:
+        """Run granular import with step-by-step control (async version)."""
         self.console.clear()
         self.console.print(
             Panel.fit(
@@ -410,7 +383,7 @@ class GranularImporter:
                 echo_info("Retrying failed resources...")
 
             # Import this phase
-            result = self.import_micro_phase(micro_phase)
+            result = await self._import_micro_phase_async(micro_phase)
 
             # Show result
             self.console.print()
@@ -445,6 +418,10 @@ class GranularImporter:
         self.console.print("\n[bold green]Import Complete![/bold green]\n")
         self.console.print(self.create_phase_table())
         self.console.print("\n")
+
+    def run(self) -> None:
+        """Run granular import with step-by-step control."""
+        asyncio.run(self.run_async())
 
 
 def granular_import_menu(ctx: Any, input_dir: Path | None = None) -> None:

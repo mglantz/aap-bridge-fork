@@ -227,24 +227,25 @@ def retry_failed(
                 ctx.config.performance,
             )
 
-            # Import each resource
-            for resource in resources_to_retry:
-                source_id = resource.get("_source_id") or resource.get("id")
+            # Import each resource in a single async context
+            async def import_resources():
+                for resource in resources_to_retry:
+                    source_id = resource.get("_source_id") or resource.get("id")
 
-                try:
-                    result = asyncio.run(
-                        importer.import_resource(
+                    try:
+                        result = await importer.import_resource(
                             rtype,
                             source_id,
                             resource,
                             resolve_dependencies=True,
                         )
-                    )
 
-                    if result:
-                        echo_success(f"  ✓ {resource.get('name', source_id)}")
-                except Exception as e:
-                    echo_error(f"  ✗ {resource.get('name', source_id)}: {e}")
+                        if result:
+                            echo_success(f"  ✓ {resource.get('name', source_id)}")
+                    except Exception as e:
+                        echo_error(f"  ✗ {resource.get('name', source_id)}: {e}")
+
+            asyncio.run(import_resources())
 
         except Exception as e:
             echo_error(f"Failed to retry {rtype}: {e}")
