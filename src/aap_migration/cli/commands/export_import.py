@@ -895,6 +895,21 @@ def import_cmd(
         if hasattr(handler, "__class__") and "RichHandler" in handler.__class__.__name__:
             root_logger.removeHandler(handler)
 
+    # Reinitialize HTTP client before import
+    # The client may have been created outside an event loop context,
+    # making its AsyncClient and asyncio.Lock invalid. We need a fresh
+    # client for this asyncio.run() context.
+    from aap_migration.client.aap_target_client import AAPTargetClient
+
+    ctx._target_client = AAPTargetClient(
+        config=ctx.config.target,
+        rate_limit=ctx.config.performance.rate_limit,
+        log_payloads=ctx.config.logging.log_payloads,
+        max_payload_size=ctx.config.logging.max_payload_size,
+        max_connections=ctx.config.performance.http_max_connections,
+        max_keepalive_connections=ctx.config.performance.http_max_keepalive_connections,
+    )
+
     # Load metadata with inline progress (:: → ✓)
     metadata_file = input_dir / "metadata.json"
     if not metadata_file.exists():

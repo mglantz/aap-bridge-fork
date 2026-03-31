@@ -436,5 +436,20 @@ def granular_import_menu(ctx: Any, input_dir: Path | None = None) -> None:
     if input_dir is None:
         input_dir = Path(ctx.obj.config.paths.transform_dir)
 
+    # CRITICAL: Reinitialize HTTP client before granular import
+    # The client may have been created outside an event loop context,
+    # making its AsyncClient and asyncio.Lock invalid. We need a fresh
+    # client for this asyncio.run() context.
+    from aap_migration.client.aap_target_client import AAPTargetClient
+
+    ctx.obj._target_client = AAPTargetClient(
+        config=ctx.obj.config.target,
+        rate_limit=ctx.obj.config.performance.rate_limit,
+        log_payloads=ctx.obj.config.logging.log_payloads,
+        max_payload_size=ctx.obj.config.logging.max_payload_size,
+        max_connections=ctx.obj.config.performance.http_max_connections,
+        max_keepalive_connections=ctx.obj.config.performance.http_max_keepalive_connections,
+    )
+
     importer = GranularImporter(ctx.obj, input_dir)
     importer.run()

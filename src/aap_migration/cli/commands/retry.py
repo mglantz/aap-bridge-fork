@@ -176,6 +176,20 @@ def retry_failed(
 
     echo_success(f"Cleared {len(failed_resources)} failed resource statuses")
 
+    # Reinitialize HTTP client before retry
+    # The client may have been created outside an event loop context,
+    # making its AsyncClient and asyncio.Lock invalid.
+    from aap_migration.client.aap_target_client import AAPTargetClient
+
+    ctx._target_client = AAPTargetClient(
+        config=ctx.config.target,
+        rate_limit=ctx.config.performance.rate_limit,
+        log_payloads=ctx.config.logging.log_payloads,
+        max_payload_size=ctx.config.logging.max_payload_size,
+        max_connections=ctx.config.performance.http_max_connections,
+        max_keepalive_connections=ctx.config.performance.http_max_keepalive_connections,
+    )
+
     # Now run import with --resume to import the cleared resources
     click.echo()
     echo_info("Starting import of previously failed resources...")
