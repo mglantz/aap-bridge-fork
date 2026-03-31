@@ -1,7 +1,7 @@
 """Retry and resume commands for failed imports."""
 
-import asyncio
-import json
+import subprocess
+import sys
 from pathlib import Path
 
 import click
@@ -16,9 +16,6 @@ from aap_migration.cli.utils import (
     echo_success,
     echo_warning,
 )
-from aap_migration.migration.importer import create_importer
-from aap_migration.migration.state import MigrationState
-from aap_migration.reporting.enhanced_progress import EnhancedProgressDisplay
 from aap_migration.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -176,101 +173,44 @@ def retry_failed(
 
     echo_success(f"Cleared {len(failed_resources)} failed resource statuses")
 
-    # Reinitialize HTTP client before retry
-    # The client may have been created outside an event loop context,
-    # making its AsyncClient and asyncio.Lock invalid.
-    from aap_migration.client.aap_target_client import AAPTargetClient
-
-    ctx._target_client = AAPTargetClient(
-        config=ctx.config.target,
-        rate_limit=ctx.config.performance.rate_limit,
-        log_payloads=ctx.config.logging.log_payloads,
-        max_payload_size=ctx.config.logging.max_payload_size,
-        max_connections=ctx.config.performance.http_max_connections,
-        max_keepalive_connections=ctx.config.performance.http_max_keepalive_connections,
-    )
-
-    # Now run import with --resume to import the cleared resources
+    # Now run import using the proven migrate command
     click.echo()
     echo_info("Starting import of previously failed resources...")
-    echo_info("(Using --resume mode to skip already-imported resources)")
+    echo_info("(Using proven migrate command to retry)")
     click.echo()
 
-    # Import each resource type that had failures
+    # Build config path argument
+    config_arg = []
+    if ctx.config_path:
+        config_arg = ["--config", str(ctx.config_path)]
+
+    # Import each resource type that had failures using proven migrate command
     for rtype in grouped.keys():
         echo_info(f"Retrying {rtype}...")
 
-        # Load resources from transformed files
-        resource_dir = input_dir / rtype
-        if not resource_dir.exists():
-            echo_warning(f"No transformed data found for {rtype}, skipping")
-            continue
-
-        all_resources = []
-        for file_path in sorted(resource_dir.glob(f"{rtype}_*.json")):
-            try:
-                with open(file_path) as f:
-                    resources = json.load(f)
-                    if isinstance(resources, list):
-                        all_resources.extend(resources)
-                    else:
-                        all_resources.append(resources)
-            except Exception as e:
-                echo_error(f"Failed to load {file_path}: {e}")
-                continue
-
-        if not all_resources:
-            echo_warning(f"No resources found in {resource_dir}")
-            continue
-
-        # Filter to only retry the ones that were failed
-        failed_source_ids = {r["source_id"] for r in grouped[rtype]}
-        resources_to_retry = [
-            r for r in all_resources
-            if (r.get("_source_id") or r.get("id")) in failed_source_ids
+        # Build command using the proven migrate command
+        cmd = [
+            sys.executable, "-m", "aap_migration.cli.main",
+        ] + config_arg + [
+            "migrate",
+            "-r", rtype,
+            "--skip-prep",
+            "--phase", "all"
         ]
 
-        echo_info(f"  Found {len(resources_to_retry)} resources to retry")
-
-        # Run import for this resource type
         try:
-            importer = create_importer(
-                rtype,
-                ctx.target_client,
-                ctx.migration_state,
-                ctx.config.performance,
+            # Run the proven migrate command
+            result = subprocess.run(
+                cmd,
+                check=False,
+                capture_output=False,  # Show output in real-time
+                text=True
             )
 
-            # Import each resource in a single async context
-            async def import_resources():
-                for resource in resources_to_retry:
-                    source_id = resource.get("_source_id") or resource.get("id")
-
-                    try:
-                        result = await importer.import_resource(
-                            rtype,
-                            source_id,
-                            resource,
-                            resolve_dependencies=True,
-                        )
-
-                        if result:
-                            echo_success(f"  ✓ {resource.get('name', source_id)}")
-                    except Exception as e:
-                        error_msg = str(e).lower()
-                        # Check if resource already exists on target
-                        if "already exists" in error_msg or ("400" in str(e) and (
-                            "username" in error_msg or
-                            "name" in error_msg or
-                            "duplicate" in error_msg
-                        )):
-                            # Resource already exists, treat as success
-                            echo_info(f"  ↷ {resource.get('name', source_id)} (already exists)")
-                        else:
-                            # Real failure
-                            echo_error(f"  ✗ {resource.get('name', source_id)}: {e}")
-
-            asyncio.run(import_resources())
+            if result.returncode == 0:
+                echo_success(f"  ✓ {rtype} retry completed")
+            else:
+                echo_warning(f"  ⚠ {rtype} retry finished with errors")
 
         except Exception as e:
             echo_error(f"Failed to retry {rtype}: {e}")
