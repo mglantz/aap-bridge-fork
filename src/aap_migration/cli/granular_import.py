@@ -238,42 +238,49 @@ class GranularImporter:
             fail_count=0,
         )
 
-        with Live(progress, console=self.console):
-            for resource in all_resources:
-                source_id = resource.get("_source_id") or resource.get("id")
-                resource_name = resource.get("name", f"ID:{source_id}")
+        # Create event loop once and reuse it
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
 
-                # Check if already imported
-                if self.state.is_migrated(resource_type, source_id):
-                    skipped += 1
-                    progress.update(task, advance=1)
-                    continue
+        try:
+            with Live(progress, console=self.console):
+                for resource in all_resources:
+                    source_id = resource.get("_source_id") or resource.get("id")
+                    resource_name = resource.get("name", f"ID:{source_id}")
 
-                try:
-                    result = asyncio.run(
-                        importer.import_resource(
-                            resource_type,
-                            source_id,
-                            resource,
-                            resolve_dependencies=True,
-                        )
-                    )
-
-                    if result:
-                        completed += 1
-                        progress.update(task, advance=1, success_count=completed)
-                    else:
+                    # Check if already imported
+                    if self.state.is_migrated(resource_type, source_id):
                         skipped += 1
                         progress.update(task, advance=1)
+                        continue
 
-                except Exception as e:
-                    failed += 1
-                    progress.update(task, advance=1, fail_count=failed)
-                    logger.error(
-                        f"Failed to import {resource_name}: {e}",
-                        resource_type=resource_type,
-                        source_id=source_id,
-                    )
+                    try:
+                        result = loop.run_until_complete(
+                            importer.import_resource(
+                                resource_type,
+                                source_id,
+                                resource,
+                                resolve_dependencies=True,
+                            )
+                        )
+
+                        if result:
+                            completed += 1
+                            progress.update(task, advance=1, success_count=completed)
+                        else:
+                            skipped += 1
+                            progress.update(task, advance=1)
+
+                    except Exception as e:
+                        failed += 1
+                        progress.update(task, advance=1, fail_count=failed)
+                        logger.error(
+                            f"Failed to import {resource_name}: {e}",
+                            resource_type=resource_type,
+                            source_id=source_id,
+                        )
+        finally:
+            loop.close()
 
         return {
             "total": len(all_resources),
